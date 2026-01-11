@@ -1,0 +1,33 @@
+name: 米游社星穹铁道签到
+
+on:
+  # 定时触发 - 每天北京时间早上8点运行 (UTC 0点)
+  schedule:
+    - cron: '0 0 * * *'
+
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run Sign Script
+        env:
+          MIYOUSHE_COOKIE: ${{ secrets.MIYOUSHE_COOKIE }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: |
+          python sign.py
