@@ -200,29 +200,38 @@ def get_bbs_sign_info(cookies):
 
 def do_bbs_sign(cookies):
     """执行候车室打卡"""
-    # 论坛签到使用的 salt
-    salt = "X3txHqSlrpgc7t5vCuTrG2tqhBRO2vME"
+    # gids 需要是整数
+    payload = {"gids": int(STAR_RAIL_GID)}
+    body = json.dumps(payload, separators=(',', ':'))
+
+    # 论坛签到使用 DS2 算法，salt_x6
+    salt = "t0qEgfub6cvueAPgR5m9aQWWVciEer7v"
     timestamp = int(time.time())
-    random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
-    text = f"salt={salt}&t={timestamp}&r={random_str}"
-    ds = f"{timestamp},{random_str},{hashlib.md5(text.encode()).hexdigest()}"
+    random_int = str(random.randint(100001, 200000))
+    text = f"salt={salt}&t={timestamp}&r={random_int}&b={body}&q="
+    ds = f"{timestamp},{random_int},{hashlib.md5(text.encode()).hexdigest()}"
+
+    device_id = generate_device_id()
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 12; SM-G977N Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36 miHoYoBBS/2.55.1",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 12; SM-G977N Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36 miHoYoBBS/2.71.1",
         "Referer": "https://app.mihoyo.com",
-        "x-rpc-app_version": "2.55.1",
+        "x-rpc-app_version": "2.71.1",
         "x-rpc-client_type": "2",
-        "x-rpc-device_id": generate_device_id(),
+        "x-rpc-device_id": device_id,
+        "x-rpc-device_name": "Xiaomi MI 6",
+        "x-rpc-device_model": "MI 6",
+        "x-rpc-sys_version": "12",
+        "x-rpc-channel": "miyousheluodi",
+        "x-rpc-platform": "android",
         "DS": ds,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=UTF-8",
     }
-
-    payload = {"gids": STAR_RAIL_GID}
 
     # 重试机制
     for attempt in range(3):
         try:
-            resp = requests.post(BBS_SIGN_URL, headers=headers, cookies=cookies, json=payload, timeout=30)
+            resp = requests.post(BBS_SIGN_URL, headers=headers, cookies=cookies, data=body, timeout=30)
             print(f"候车室打卡响应: {resp.text}")
             return resp.json()
         except Exception as e:
