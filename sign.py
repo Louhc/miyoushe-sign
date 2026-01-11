@@ -12,42 +12,45 @@ import string
 import requests
 
 # ============ 配置区 ============
-# 从环境变量读取（GitHub Secrets）
 COOKIE = os.environ.get("MIYOUSHE_COOKIE", "")
-PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "")  # PushPlus 微信推送
+PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "")
 
 # 星穹铁道签到配置
 ACT_ID = "e202304121516551"
+GAME_BIZ = "hkrpg_cn"
+
+# API 地址
+ROLE_URL = "https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie"
 SIGN_URL = "https://api-takumi.mihoyo.com/event/luna/sign"
 INFO_URL = "https://api-takumi.mihoyo.com/event/luna/info"
-REWARD_URL = "https://api-takumi.mihoyo.com/event/luna/home"
 
 # 请求头
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Linux; Android 12; SM-G977N Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36 miHoYoBBS/2.55.1",
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) miHoYoBBS/2.55.1",
     "Referer": "https://webstatic.mihoyo.com/",
     "Origin": "https://webstatic.mihoyo.com",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9",
     "x-rpc-app_version": "2.55.1",
     "x-rpc-client_type": "5",
-    "x-rpc-device_id": "",
+    "x-rpc-platform": "ios",
+    "x-rpc-device_model": "iPhone",
+    "x-rpc-sys_version": "16.0",
 }
 
 
 def generate_device_id():
     """生成随机设备ID"""
-    return str(hashlib.md5(str(time.time()).encode()).hexdigest())
+    return ''.join(random.choices('0123456789abcdef', k=32))
 
 
 def generate_ds():
     """生成DS签名"""
-    # 米游社 DS 算法 (Salt for version 2.55.1)
     salt = "t0qEgfub6cvueAPgR5m9aQWWVciEer7v"
     timestamp = int(time.time())
     random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
-
     text = f"salt={salt}&t={timestamp}&r={random_str}"
     md5_hash = hashlib.md5(text.encode()).hexdigest()
-
     return f"{timestamp},{random_str},{md5_hash}"
 
 
@@ -62,39 +65,63 @@ def get_cookie_dict(cookie_str):
     return cookie_dict
 
 
-def get_uid_region(cookie_dict):
-    """获取UID和服务器区域"""
-    # 优先使用 ltuid 或 account_id
-    uid = cookie_dict.get('ltuid') or cookie_dict.get('account_id') or cookie_dict.get('login_uid', '')
-    return uid
-
-
-def get_sign_info(headers, cookies):
-    """获取签到信息"""
-    params = {"act_id": ACT_ID}
+def get_game_roles(cookies):
+    """获取绑定的游戏角色"""
+    params = {"game_biz": GAME_BIZ}
     try:
-        resp = requests.get(INFO_URL, headers=headers, cookies=cookies, params=params, timeout=10)
+        resp = requests.get(ROLE_URL, headers=HEADERS, cookies=cookies, params=params, timeout=10)
+        print(f"获取角色响应: {resp.text[:500]}")
+        data = resp.json()
+        if data.get("retcode") == 0:
+            roles = data.get("data", {}).get("list", [])
+            return roles
+        else:
+            print(f"获取角色失败: retcode={data.get('retcode')}, message={data.get('message')}")
+    except Exception as e:
+        print(f"获取角色异常: {e}")
+    return []
+
+
+def get_sign_info(cookies, region, game_uid):
+    """获取签到信息"""
+    params = {
+        "act_id": ACT_ID,
+        "region": region,
+        "uid": game_uid,
+        "lang": "zh-cn"
+    }
+    try:
+        resp = requests.get(INFO_URL, headers=HEADERS, cookies=cookies, params=params, timeout=10)
+        print(f"签到信息响应: {resp.text[:500]}")
         data = resp.json()
         if data.get("retcode") == 0:
             return data.get("data", {})
+        else:
+            print(f"获取签到信息失败: retcode={data.get('retcode')}, message={data.get('message')}")
     except Exception as e:
-        print(f"获取签到信息失败: {e}")
+        print(f"获取签到信息异常: {e}")
     return None
 
 
-def do_sign(headers, cookies):
+def do_sign(cookies, region, game_uid):
     """执行签到"""
-    payload = {"act_id": ACT_ID}
+    payload = {
+        "act_id": ACT_ID,
+        "region": region,
+        "uid": game_uid,
+        "lang": "zh-cn"
+    }
 
-    headers = headers.copy()
+    headers = HEADERS.copy()
     headers["DS"] = generate_ds()
     headers["x-rpc-device_id"] = generate_device_id()
 
     try:
         resp = requests.post(SIGN_URL, headers=headers, cookies=cookies, json=payload, timeout=10)
+        print(f"签到响应: {resp.text}")
         return resp.json()
     except Exception as e:
-        print(f"签到请求失败: {e}")
+        print(f"签到请求异常: {e}")
         return {"retcode": -1, "message": str(e)}
 
 
@@ -136,59 +163,85 @@ def main():
 
     # 解析Cookie
     cookies = get_cookie_dict(COOKIE)
-    uid = get_uid_region(cookies)
 
-    print(f"当前账号UID: {uid}")
+    # 打印Cookie关键字段（脱敏）
+    print("Cookie 关键字段检查:")
+    for key in ['account_id', 'cookie_token', 'ltoken_v2', 'ltuid_v2', 'ltoken', 'ltuid']:
+        value = cookies.get(key, '')
+        if value:
+            print(f"  {key}: {value[:10]}...（已找到）")
+        else:
+            print(f"  {key}: 未找到")
 
-    # 获取签到信息
-    sign_info = get_sign_info(HEADERS, cookies)
+    # 获取绑定的游戏角色
+    print("\n正在获取绑定的游戏角色...")
+    roles = get_game_roles(cookies)
 
-    if sign_info is None:
-        msg = "获取签到信息失败，Cookie可能已过期"
+    if not roles:
+        msg = "未找到绑定的星穹铁道角色<br>请检查：<br>1. Cookie是否完整<br>2. 账号是否绑定了星穹铁道角色"
         print(msg)
         push_wechat("星穹铁道签到失败", msg)
         return
 
-    is_sign = sign_info.get("is_sign", False)
-    total_sign_day = sign_info.get("total_sign_day", 0)
+    # 遍历所有角色签到
+    results = []
+    for role in roles:
+        nickname = role.get("nickname", "未知")
+        game_uid = role.get("game_uid", "")
+        region = role.get("region", "")
+        level = role.get("level", 0)
 
-    if is_sign:
-        msg = f"今日已签到，本月累计签到 {total_sign_day} 天"
-        print(msg)
-        push_wechat("星穹铁道签到提醒", msg)
-        return
+        print(f"\n角色: {nickname} (UID: {game_uid}, 等级: {level}, 服务器: {region})")
 
-    # 随机延迟，避免检测
-    delay = random.randint(3, 10)
-    print(f"等待 {delay} 秒后签到...")
-    time.sleep(delay)
+        # 获取签到信息
+        sign_info = get_sign_info(cookies, region, game_uid)
 
-    # 执行签到
-    result = do_sign(HEADERS, cookies)
-    retcode = result.get("retcode", -1)
-    message = result.get("message", "未知错误")
+        if sign_info is None:
+            results.append(f"{nickname}: 获取签到信息失败")
+            continue
 
-    if retcode == 0:
-        # 签到成功
-        new_total = total_sign_day + 1
-        msg = f"签到成功！本月累计签到 {new_total} 天"
-        print(msg)
-        push_wechat("星穹铁道签到成功", msg)
-    elif retcode == -5003:
-        # 已经签到过
-        msg = f"今日已签到，本月累计签到 {total_sign_day} 天"
-        print(msg)
-        push_wechat("星穹铁道签到提醒", msg)
-    elif "验证码" in message or retcode == 1034:
-        # 触发验证码
-        msg = f"签到失败：触发验证码，请手动签到或更换IP<br>错误信息: {message}"
-        print(msg)
-        push_wechat("星穹铁道签到失败", msg)
-    else:
-        msg = f"签到失败<br>错误码: {retcode}<br>错误信息: {message}"
-        print(msg)
-        push_wechat("星穹铁道签到失败", msg)
+        is_sign = sign_info.get("is_sign", False)
+        total_sign_day = sign_info.get("total_sign_day", 0)
 
+        if is_sign:
+            msg = f"今日已签到，本月累计 {total_sign_day} 天"
+            print(msg)
+            results.append(f"{nickname}: {msg}")
+            continue
+
+        # 随机延迟
+        delay = random.randint(2, 5)
+        print(f"等待 {delay} 秒后签到...")
+        time.sleep(delay)
+
+        # 执行签到
+        result = do_sign(cookies, region, game_uid)
+        retcode = result.get("retcode", -1)
+        message = result.get("message", "未知错误")
+
+        if retcode == 0:
+            new_total = total_sign_day + 1
+            msg = f"签到成功！本月累计 {new_total} 天"
+            results.append(f"{nickname}: {msg}")
+        elif retcode == -5003:
+            msg = f"今日已签到，本月累计 {total_sign_day} 天"
+            results.append(f"{nickname}: {msg}")
+        elif "验证码" in message or retcode == 1034:
+            msg = f"触发验证码，请手动签到"
+            results.append(f"{nickname}: {msg}")
+        else:
+            msg = f"签到失败 (错误码:{retcode}, {message})"
+            results.append(f"{nickname}: {msg}")
+
+        print(msg)
+
+    # 推送汇总结果
+    summary = "<br>".join(results)
+    title = "星穹铁道签到完成"
+    push_wechat(title, summary)
+
+    print("\n" + "=" * 50)
+    print("签到完成")
     print("=" * 50)
 
 
