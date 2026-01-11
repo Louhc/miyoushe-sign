@@ -90,16 +90,23 @@ def get_sign_info(cookies, region, game_uid):
         "uid": game_uid,
         "lang": "zh-cn"
     }
+    headers = HEADERS.copy()
+    headers["DS"] = generate_ds()
+    headers["x-rpc-device_id"] = generate_device_id()
+
     try:
-        resp = requests.get(INFO_URL, headers=HEADERS, cookies=cookies, params=params, timeout=10)
+        resp = requests.get(INFO_URL, headers=headers, cookies=cookies, params=params, timeout=10)
         print(f"签到信息响应: {resp.text[:500]}")
         data = resp.json()
         if data.get("retcode") == 0:
             return data.get("data", {})
         else:
-            print(f"获取签到信息失败: retcode={data.get('retcode')}, message={data.get('message')}")
+            error_msg = f"retcode={data.get('retcode')}, message={data.get('message')}"
+            print(f"获取签到信息失败: {error_msg}")
+            return {"error": error_msg}
     except Exception as e:
         print(f"获取签到信息异常: {e}")
+        return {"error": str(e)}
     return None
 
 
@@ -196,8 +203,9 @@ def main():
         # 获取签到信息
         sign_info = get_sign_info(cookies, region, game_uid)
 
-        if sign_info is None:
-            results.append(f"{nickname}: 获取签到信息失败")
+        if sign_info is None or "error" in sign_info:
+            error_detail = sign_info.get("error", "未知错误") if sign_info else "请求失败"
+            results.append(f"{nickname}: 获取签到信息失败 ({error_detail})")
             continue
 
         is_sign = sign_info.get("is_sign", False)
