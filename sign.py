@@ -239,40 +239,22 @@ def bbs_sign_task(cookies):
     print("米游社候车室打卡")
     print("=" * 50)
 
-    # 获取打卡信息
-    sign_info = get_bbs_sign_info(cookies)
-
-    if sign_info is None:
-        return "候车室: 获取打卡信息失败"
-
-    if "error" in sign_info:
-        return f"候车室: 获取打卡信息失败 ({sign_info['error']})"
-
-    is_sign = sign_info.get("is_sign", False)
-    sign_cnt = sign_info.get("sign_cnt", 0)
-
-    if is_sign:
-        msg = f"今日已打卡，本月累计 {sign_cnt} 天"
-        print(msg)
-        return f"候车室: {msg}"
-
     # 随机延迟
     delay = random.randint(2, 5)
     print(f"等待 {delay} 秒后打卡...")
     time.sleep(delay)
 
-    # 执行打卡
+    # 直接执行打卡
     result = do_bbs_sign(cookies)
     retcode = result.get("retcode", -1)
     message = result.get("message", "未知错误")
 
     if retcode == 0:
-        new_cnt = sign_cnt + 1
-        msg = f"打卡成功！本月累计 {new_cnt} 天"
+        msg = "打卡成功！"
         print(msg)
         return f"候车室: {msg}"
     elif retcode == 1008:
-        msg = f"今日已打卡，本月累计 {sign_cnt} 天"
+        msg = "今日已打卡"
         print(msg)
         return f"候车室: {msg}"
     else:
