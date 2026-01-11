@@ -25,6 +25,13 @@ ROLE_URL = "https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie"
 SIGN_URL = "https://api-takumi.mihoyo.com/event/luna/sign"
 INFO_URL = "https://api-takumi.mihoyo.com/event/luna/info"
 
+# 候车室（论坛）打卡 API
+BBS_SIGN_URL = "https://bbs-api.mihoyo.com/apihub/app/api/signIn"
+BBS_SIGN_INFO_URL = "https://bbs-api.mihoyo.com/apihub/api/getSignInInfo"
+
+# 星穹铁道的 gids (游戏论坛ID)
+STAR_RAIL_GID = "6"
+
 # 请求头
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) miHoYoBBS/2.55.1",
@@ -152,6 +159,106 @@ def do_sign(cookies, region, game_uid):
         return {"retcode": -1, "message": str(e)}
 
 
+def get_bbs_sign_info(cookies):
+    """获取候车室打卡信息"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 12; SM-G977N Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36 miHoYoBBS/2.55.1",
+        "Referer": "https://app.mihoyo.com",
+        "x-rpc-app_version": "2.55.1",
+        "x-rpc-client_type": "2",
+        "x-rpc-device_id": generate_device_id(),
+    }
+
+    params = {"gids": STAR_RAIL_GID}
+
+    try:
+        resp = requests.get(BBS_SIGN_INFO_URL, headers=headers, cookies=cookies, params=params, timeout=10)
+        print(f"候车室打卡信息响应: {resp.text[:500]}")
+        data = resp.json()
+        if data.get("retcode") == 0:
+            return data.get("data", {})
+        else:
+            print(f"获取打卡信息失败: {data.get('message')}")
+    except Exception as e:
+        print(f"获取打卡信息异常: {e}")
+    return None
+
+
+def do_bbs_sign(cookies):
+    """执行候车室打卡"""
+    # 论坛签到使用的 salt
+    salt = "X3txHqSlrpgc7t5vCuTrG2tqhBRO2vME"
+    timestamp = int(time.time())
+    random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    text = f"salt={salt}&t={timestamp}&r={random_str}"
+    ds = f"{timestamp},{random_str},{hashlib.md5(text.encode()).hexdigest()}"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 12; SM-G977N Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36 miHoYoBBS/2.55.1",
+        "Referer": "https://app.mihoyo.com",
+        "x-rpc-app_version": "2.55.1",
+        "x-rpc-client_type": "2",
+        "x-rpc-device_id": generate_device_id(),
+        "DS": ds,
+        "Content-Type": "application/json",
+    }
+
+    payload = {"gids": STAR_RAIL_GID}
+
+    try:
+        resp = requests.post(BBS_SIGN_URL, headers=headers, cookies=cookies, json=payload, timeout=10)
+        print(f"候车室打卡响应: {resp.text}")
+        return resp.json()
+    except Exception as e:
+        print(f"候车室打卡异常: {e}")
+        return {"retcode": -1, "message": str(e)}
+
+
+def bbs_sign_task(cookies):
+    """候车室打卡任务"""
+    print("\n" + "=" * 50)
+    print("米游社候车室打卡")
+    print("=" * 50)
+
+    # 获取打卡信息
+    sign_info = get_bbs_sign_info(cookies)
+
+    if sign_info is None:
+        return "候车室: 获取打卡信息失败"
+
+    is_sign = sign_info.get("is_sign", False)
+    sign_cnt = sign_info.get("sign_cnt", 0)
+
+    if is_sign:
+        msg = f"今日已打卡，本月累计 {sign_cnt} 天"
+        print(msg)
+        return f"候车室: {msg}"
+
+    # 随机延迟
+    delay = random.randint(2, 5)
+    print(f"等待 {delay} 秒后打卡...")
+    time.sleep(delay)
+
+    # 执行打卡
+    result = do_bbs_sign(cookies)
+    retcode = result.get("retcode", -1)
+    message = result.get("message", "未知错误")
+
+    if retcode == 0:
+        new_cnt = sign_cnt + 1
+        msg = f"打卡成功！本月累计 {new_cnt} 天"
+        print(msg)
+        return f"候车室: {msg}"
+    elif retcode == 1008:
+        msg = f"今日已打卡，本月累计 {sign_cnt} 天"
+        print(msg)
+        return f"候车室: {msg}"
+    else:
+        msg = f"打卡失败 (错误码:{retcode}, {message})"
+        print(msg)
+        return f"候车室: {msg}"
+
+
 def push_wechat(title, content):
     """PushPlus 微信推送"""
     if not PUSHPLUS_TOKEN:
@@ -263,13 +370,17 @@ def main():
 
         print(msg)
 
+    # 执行候车室打卡
+    bbs_result = bbs_sign_task(cookies)
+    results.append(bbs_result)
+
     # 推送汇总结果
     summary = "<br>".join(results)
     title = "星穹铁道签到完成"
     push_wechat(title, summary)
 
     print("\n" + "=" * 50)
-    print("签到完成")
+    print("全部任务完成")
     print("=" * 50)
 
 
