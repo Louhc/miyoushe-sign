@@ -383,9 +383,9 @@ def main():
 
         print(msg)
 
-    # 执行候车室打卡
-    bbs_result = bbs_sign_task(cookies)
-    results.append(bbs_result)
+    # 候车室打卡（需要 stoken，暂时禁用）
+    # bbs_result = bbs_sign_task(cookies)
+    # results.append(bbs_result)
 
     # 推送汇总结果
     summary = "<br>".join(results)
