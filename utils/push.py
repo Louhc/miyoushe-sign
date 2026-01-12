@@ -2,15 +2,69 @@
 # -*- coding: utf-8 -*-
 """
 推送通知模块
+支持：企业微信群机器人、PushPlus
 """
 
 import os
+import re
 import requests
 
+# 企业微信群机器人 Webhook
+WECOM_WEBHOOK = os.environ.get("WECOM_WEBHOOK", "")
+
+# PushPlus Token (备用)
 PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "")
 
 
-def push_wechat(title: str, content: str, template: str = "html") -> bool:
+def html_to_markdown(html: str) -> str:
+    """Convert simple HTML to Markdown"""
+    text = html
+    text = re.sub(r'<b>(.*?)</b>', r'**\1**', text)
+    text = re.sub(r'<br\s*/?>', '\n', text)
+    text = re.sub(r'<[^>]+>', '', text)
+    return text
+
+
+def push_wecom(title: str, content: str) -> bool:
+    """
+    企业微信群机器人推送
+
+    Args:
+        title: 消息标题
+        content: 消息内容 (HTML格式会转换为Markdown)
+
+    Returns:
+        是否推送成功
+    """
+    if not WECOM_WEBHOOK:
+        return False
+
+    # Convert HTML to Markdown
+    md_content = html_to_markdown(content)
+    message = f"## {title}\n\n{md_content}"
+
+    data = {
+        "msgtype": "markdown",
+        "markdown": {
+            "content": message
+        }
+    }
+
+    try:
+        resp = requests.post(WECOM_WEBHOOK, json=data, timeout=10)
+        result = resp.json()
+        if result.get("errcode") == 0:
+            print(f"企业微信推送成功: {title}")
+            return True
+        else:
+            print(f"企业微信推送失败: {result}")
+            return False
+    except Exception as e:
+        print(f"企业微信推送异常: {e}")
+        return False
+
+
+def push_pushplus(title: str, content: str, template: str = "html") -> bool:
     """
     PushPlus 微信推送
 
@@ -23,7 +77,6 @@ def push_wechat(title: str, content: str, template: str = "html") -> bool:
         是否推送成功
     """
     if not PUSHPLUS_TOKEN:
-        print("未配置 PUSHPLUS_TOKEN，跳过推送")
         return False
 
     url = "http://www.pushplus.plus/send"
@@ -38,11 +91,35 @@ def push_wechat(title: str, content: str, template: str = "html") -> bool:
         resp = requests.post(url, json=data, timeout=10)
         result = resp.json()
         if result.get("code") == 200:
-            print(f"微信推送成功: {title}")
+            print(f"PushPlus推送成功: {title}")
             return True
         else:
-            print(f"微信推送失败: {result}")
+            print(f"PushPlus推送失败: {result}")
             return False
     except Exception as e:
-        print(f"微信推送异常: {e}")
+        print(f"PushPlus推送异常: {e}")
         return False
+
+
+def push_wechat(title: str, content: str, template: str = "html") -> bool:
+    """
+    推送消息 (优先企业微信，备用PushPlus)
+
+    Args:
+        title: 消息标题
+        content: 消息内容
+        template: 模板类型
+
+    Returns:
+        是否推送成功
+    """
+    # 优先使用企业微信
+    if WECOM_WEBHOOK:
+        return push_wecom(title, content)
+
+    # 备用 PushPlus
+    if PUSHPLUS_TOKEN:
+        return push_pushplus(title, content, template)
+
+    print("未配置任何推送方式")
+    return False

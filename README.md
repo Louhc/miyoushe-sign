@@ -36,7 +36,10 @@ Go to `Settings` → `Secrets and variables` → `Actions`:
 | Secret | Required | Description |
 |--------|----------|-------------|
 | `MIYOUSHE_COOKIE` | Yes | MiYouShe Cookie |
-| `PUSHPLUS_TOKEN` | Yes | PushPlus Token |
+| `WECOM_WEBHOOK` | No* | WeCom Bot Webhook URL |
+| `PUSHPLUS_TOKEN` | No* | PushPlus Token (fallback) |
+
+*At least one push method required. WeCom is recommended for instant notifications.
 
 ### 3. Configure Variables (Optional)
 
