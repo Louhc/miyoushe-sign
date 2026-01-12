@@ -36,8 +36,15 @@ def parse_yaml_simple(text: str) -> list:
             if current:
                 conferences.append(current)
             current = {'name': line.split(':', 1)[1].strip()}
+        elif line.strip().startswith('- "') and 'deadlines' in current:
+            # Multi-line deadline item (must check before key:value due to time containing ":")
+            current['deadlines'].append(line.strip().strip('- "\''))
         elif line.startswith('  ') and ':' in line and current:
-            key, value = line.strip().split(':', 1)
+            stripped = line.strip()
+            # Skip lines that look like list items
+            if stripped.startswith('- '):
+                continue
+            key, value = stripped.split(':', 1)
             value = value.strip()
 
             # Handle lists
@@ -58,14 +65,8 @@ def parse_yaml_simple(text: str) -> list:
                         t.strip().strip('"\'')
                         for t in value.split(',') if t.strip()
                     ]
-            elif key.startswith('- "') and 'deadlines' in current:
-                # Multi-line deadline list
-                current['deadlines'].append(key.strip('- "\''))
             else:
                 current[key] = value.strip('"\'')
-        elif line.startswith('    - "') and 'deadlines' in current:
-            # Multi-line deadline continuation
-            current['deadlines'].append(line.strip().strip('- "\''))
 
     if current:
         conferences.append(current)
