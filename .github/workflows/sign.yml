@@ -28,6 +28,8 @@ jobs:
       - name: Run Daily Tasks
         env:
           MIYOUSHE_COOKIE: ${{ secrets.MIYOUSHE_COOKIE }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           WEATHER_AREA: ${{ vars.WEATHER_AREA || 'Queenstown' }}

@@ -2,12 +2,16 @@
 # -*- coding: utf-8 -*-
 """
 推送通知模块
-支持：企业微信群机器人、PushPlus
+支持：Telegram、企业微信群机器人、PushPlus
 """
 
 import os
 import re
 import requests
+
+# Telegram Bot
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # 企业微信群机器人 Webhook
 WECOM_WEBHOOK = os.environ.get("WECOM_WEBHOOK", "")
@@ -23,6 +27,45 @@ def html_to_markdown(html: str) -> str:
     text = re.sub(r'<br\s*/?>', '\n', text)
     text = re.sub(r'<[^>]+>', '', text)
     return text
+
+
+def push_telegram(title: str, content: str) -> bool:
+    """
+    Telegram Bot 推送
+
+    Args:
+        title: 消息标题
+        content: 消息内容 (HTML格式会转换为Markdown)
+
+    Returns:
+        是否推送成功
+    """
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return False
+
+    # Convert HTML to Markdown
+    md_content = html_to_markdown(content)
+    message = f"*{title}*\n\n{md_content}"
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    data = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+
+    try:
+        resp = requests.post(url, json=data, timeout=10)
+        result = resp.json()
+        if result.get("ok"):
+            print(f"Telegram推送成功: {title}")
+            return True
+        else:
+            print(f"Telegram推送失败: {result}")
+            return False
+    except Exception as e:
+        print(f"Telegram推送异常: {e}")
+        return False
 
 
 def push_wecom(title: str, content: str) -> bool:
@@ -103,7 +146,7 @@ def push_pushplus(title: str, content: str, template: str = "html") -> bool:
 
 def push_wechat(title: str, content: str, template: str = "html") -> bool:
     """
-    推送消息 (优先企业微信，备用PushPlus)
+    推送消息 (优先级: Telegram > 企业微信 > PushPlus)
 
     Args:
         title: 消息标题
@@ -113,7 +156,11 @@ def push_wechat(title: str, content: str, template: str = "html") -> bool:
     Returns:
         是否推送成功
     """
-    # 优先使用企业微信
+    # 优先使用 Telegram
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        return push_telegram(title, content)
+
+    # 企业微信
     if WECOM_WEBHOOK:
         return push_wecom(title, content)
 
