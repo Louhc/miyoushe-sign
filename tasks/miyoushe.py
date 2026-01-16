@@ -26,7 +26,7 @@ GAMES = {
     },
     "hk4e": {  # 原神
         "name": "原神",
-        "enabled": False,
+        "enabled": True,
         "act_id": "e202311201442471",
         "game_biz": "hk4e_cn",
     },
