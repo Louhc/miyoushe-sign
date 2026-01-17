@@ -81,8 +81,8 @@ def generate_device_id():
 
 
 def generate_ds(body="", query=""):
-    """生成DS签名"""
-    salt = "xV8v4Qu54lUKrEYFZkJhB8cuOh9Asafs"
+    """生成DS签名 (使用6X salt用于签到)"""
+    salt = "t0qEgfub6cvueAPgR5m9aQWWVciEer7v"
     timestamp = int(time.time())
     random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
     text = f"salt={salt}&t={timestamp}&r={random_str}&b={body}&q={query}"
