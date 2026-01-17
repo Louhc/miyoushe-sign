@@ -23,31 +23,45 @@ GAMES = {
         "enabled": True,
         "act_id": "e202304121516551",
         "game_biz": "hkrpg_cn",
+        "api_type": "luna",
     },
     "hk4e": {  # 原神
         "name": "原神",
         "enabled": True,
-        "act_id": "e202311201442471",
+        "act_id": "e202009291139501",
         "game_biz": "hk4e_cn",
+        "api_type": "bbs_sign_reward",
     },
     "bh3": {  # 崩坏3
         "name": "崩坏3",
         "enabled": False,
         "act_id": "e202207181446311",
         "game_biz": "bh3_cn",
+        "api_type": "luna",
     },
     "nap": {  # 绝区零
         "name": "绝区零",
         "enabled": False,
         "act_id": "e202406242138391",
         "game_biz": "nap_cn",
+        "api_type": "luna",
     },
 }
 
 # API 地址
 ROLE_URL = "https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie"
-SIGN_URL = "https://api-takumi.mihoyo.com/event/luna/sign"
-INFO_URL = "https://api-takumi.mihoyo.com/event/luna/info"
+
+# 不同游戏使用不同的签到 API
+API_URLS = {
+    "luna": {
+        "sign": "https://api-takumi.mihoyo.com/event/luna/sign",
+        "info": "https://api-takumi.mihoyo.com/event/luna/info",
+    },
+    "bbs_sign_reward": {
+        "sign": "https://api-takumi.mihoyo.com/event/bbs_sign_reward/sign",
+        "info": "https://api-takumi.mihoyo.com/event/bbs_sign_reward/info",
+    },
+}
 
 # 请求头
 HEADERS = {
@@ -100,8 +114,9 @@ def get_game_roles(cookies, game_biz):
     return []
 
 
-def get_sign_info(cookies, act_id, region, game_uid):
+def get_sign_info(cookies, act_id, region, game_uid, api_type="luna"):
     """获取签到信息"""
+    info_url = API_URLS[api_type]["info"]
     params = {
         "act_id": act_id,
         "region": region,
@@ -115,7 +130,7 @@ def get_sign_info(cookies, act_id, region, game_uid):
     headers["x-rpc-device_id"] = generate_device_id()
 
     try:
-        resp = requests.get(INFO_URL, headers=headers, cookies=cookies, params=params, timeout=10)
+        resp = requests.get(info_url, headers=headers, cookies=cookies, params=params, timeout=10)
         data = resp.json()
         if data.get("retcode") == 0:
             return data.get("data", {})
@@ -124,8 +139,9 @@ def get_sign_info(cookies, act_id, region, game_uid):
     return None
 
 
-def do_sign(cookies, act_id, region, game_uid):
+def do_sign(cookies, act_id, region, game_uid, api_type="luna"):
     """执行签到"""
+    sign_url = API_URLS[api_type]["sign"]
     payload = {
         "act_id": act_id,
         "region": region,
@@ -140,7 +156,7 @@ def do_sign(cookies, act_id, region, game_uid):
     headers["Content-Type"] = "application/json"
 
     try:
-        resp = requests.post(SIGN_URL, headers=headers, cookies=cookies, json=payload, timeout=10)
+        resp = requests.post(sign_url, headers=headers, cookies=cookies, json=payload, timeout=10)
         return resp.json()
     except Exception as e:
         print(f"签到请求异常: {e}")
@@ -178,7 +194,8 @@ def sign_game(game_key: str) -> list:
         region = role.get("region", "")
 
         # 获取签到信息
-        sign_info = get_sign_info(cookies, game["act_id"], region, game_uid)
+        api_type = game.get("api_type", "luna")
+        sign_info = get_sign_info(cookies, game["act_id"], region, game_uid, api_type)
 
         if sign_info is None:
             results.append(f"{game['name']}-{nickname}: 获取签到信息失败")
@@ -195,7 +212,7 @@ def sign_game(game_key: str) -> list:
         time.sleep(random.randint(2, 5))
 
         # 执行签到
-        result = do_sign(cookies, game["act_id"], region, game_uid)
+        result = do_sign(cookies, game["act_id"], region, game_uid, api_type)
         retcode = result.get("retcode", -1)
         message = result.get("message", "未知错误")
 
