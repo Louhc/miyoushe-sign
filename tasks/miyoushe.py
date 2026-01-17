@@ -246,4 +246,8 @@ def run() -> list:
         results = sign_game(game_key)
         all_results.extend(results)
 
+    # 打印签到结果到控制台
+    for result in all_results:
+        print(result)
+
     return all_results
