@@ -45,7 +45,7 @@ GAMES = {
     },
     "nap": {  # 绝区零
         "name": "绝区零",
-        "enabled": False,
+        "enabled": True,
         "act_id": "e202406242138391",
         "game_biz": "nap_cn",
         "api_type": "luna",
